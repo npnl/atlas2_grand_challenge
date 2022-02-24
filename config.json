@@ -1,0 +1,15 @@
+{
+  "GroundTruthRoot": "/opt/evaluation/ground-truth/",
+  "PredictionRoot": "/input/",
+  "GroundTruthBIDSDerivativeName": ["atlas2"],
+  "PredictionBIDSDerivativeName": ["atlas2_prediction"],
+  "GroundTruthEntities": {
+    "subject": "",
+    "session": "",
+    "suffix": "mask"
+  },
+  "PredictionEntities": {
+    "suffix": "mask"
+  },
+  "LoaderBatchSize": 4
+}
