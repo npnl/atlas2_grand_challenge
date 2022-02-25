@@ -36,10 +36,10 @@ class Atlas2(ClassificationEvaluation):
 
 
 
-        self.score_functions = {'Sørensen–Dice': dice_coef,
+        self.score_functions = {'Dice': dice_coef,
                                 'Volume Difference': volume_difference,
-                                'Simple Lesion Count': simple_lesion_count_difference,
-                                'LCWA': lesion_count_by_weighted_assignment}
+                                'Simple Lesion Count': simple_lesion_count_difference}
+                                # 'LCWA': lesion_count_by_weighted_assignment}
         self.loader = None  # Defined in _prepare_data_list
         self.score_lists = defaultdict(list)  # Used in evaluate(); dict of scores found for samples
 
@@ -53,6 +53,7 @@ class Atlas2(ClassificationEvaluation):
             # Score the data
             scores = self.score(prediction, truth)
             for name, score_values in scores.items():
+                print(f'getting {name} results: {score_values}')
                 self.score_lists[name] += score_values
 
         # Compute mean for each score across samples
@@ -175,7 +176,8 @@ def dice_coef(prediction, truth, batchwise=False):
     coef_list = []
     for i in range(prediction.shape[0]):
         coef = prediction[i:i+1, ...] @ truth[i:i+1, ...].T
-        coef_list.append(coef)
+        coef = 2*coef / (np.sum(prediction[i,...]) + np.sum(truth[i,...]))
+        coef_list.append(float(coef))
 
     # Return list of coeffs if batchwise, otherwise return float
     if(batchwise):
