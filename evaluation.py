@@ -1,6 +1,5 @@
 from evalutils import ClassificationEvaluation
-from stroke.bids_loader import BIDSLoader
-# from .scoring import dice_coef, volume_difference, simple_lesion_count_difference, lesion_count_by_weighted_assignment
+from bidsio import BIDSLoader
 import pandas as pd
 import json
 from os.path import join, dirname
@@ -11,14 +10,24 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import precision_score
 config_json_path = join(dirname(__file__), 'config.json')
 
-
-
 class Atlas2(ClassificationEvaluation):
     def __init__(self,
                  prediction_root: str = None,
                  ground_truth_root: str = None,
                  aggregates: set = None
                  ):
+        '''
+        Class for evaluating user predictions on Grand Challenges.
+        Parameters
+        ----------
+        prediction_root : str
+            Path to the predictions to evaluate.
+        ground_truth_root : str
+            Path to the ground truth labels against which to compare the predictions.
+        aggregates : set
+            Set containing any of {'mean', 'std', 'min', 'max', '25%', '50%', '75%', 'count', 'uniq', 'freq'}; valid
+            entries are determined by the pandas.DataFrame.describe() method.
+        '''
         self.config = json.load(open(config_json_path, 'r'))
         if(prediction_root is None):
             self.prediction_root = self.config['PredictionRoot']
@@ -33,7 +42,6 @@ class Atlas2(ClassificationEvaluation):
             self.aggregates = {'mean', 'std', 'min', 'max', '25%', '50%', '75%', 'count', 'uniq', 'freq'}
         else:
             self.aggregates = aggregates
-
 
 
         self.score_functions = {'Dice': dice_coef,
@@ -53,17 +61,12 @@ class Atlas2(ClassificationEvaluation):
             # Score the data
             scores = self.score(prediction, truth)
             for name, score_values in scores.items():
-                print(f'getting {name} results: {score_values}')
                 self.score_lists[name] += score_values
 
         # Compute mean for each score across samples
-        # score_means = defaultdict(float)
-        # for name, score in self.score_lists:
-        #     score_means[name] = np.mean(score)
         score_summary = self.aggregate_scores(self.score_lists, self.aggregates)
         # Save score
         self.save_score(score_summary)
-
         return
 
     @staticmethod
@@ -126,21 +129,23 @@ class Atlas2(ClassificationEvaluation):
 
     def score(self, prediction, truth):
         '''
-
+        Score the prediction:truth pair according to self.score_functions
+        Parameters
+        ----------
+        prediction : np.ndarray
+            User prediction
+        truth : np.ndarray
+            Ground truth labels
         Returns
         -------
-
+        dict
+            Dictionary of scores keyed by score name.
         '''
         score_dict = {}
         for name, score_function in self.score_functions.items():
             score_dict[name] = score_function(prediction=prediction, truth=truth, batchwise=True)
         return score_dict
 
-
-import numpy as np
-import scipy.ndimage
-from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import precision_score
 
 def dice_coef(prediction, truth, batchwise=False):
     '''

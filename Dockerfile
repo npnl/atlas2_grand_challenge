@@ -1,7 +1,5 @@
 FROM python:3.9-slim
 
-
-
 RUN groupadd -r evaluator && useradd -m --no-log-init -r -g evaluator evaluator
 
 RUN mkdir -p /opt/evaluation /input /output \
