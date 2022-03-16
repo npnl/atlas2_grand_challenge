@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 import scipy.ndimage
 from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import precision_score
+from sklearn.metrics import precision_score, recall_score
 config_json_path = join(dirname(__file__), 'config.json')
 
 class Atlas2(ClassificationEvaluation):
@@ -46,7 +46,10 @@ class Atlas2(ClassificationEvaluation):
 
         self.score_functions = {'Dice': dice_coef,
                                 'Volume Difference': volume_difference,
-                                'Simple Lesion Count': simple_lesion_count_difference}
+                                'Simple Lesion Count': simple_lesion_count_difference,
+                                'Precision': precision,
+                                'Sensitivity': sensitivity,
+                                'Specificity': specificity}
                                 # 'LCWA': lesion_count_by_weighted_assignment}
         self.loader = None  # Defined in _prepare_data_list
         self.score_lists = defaultdict(list)  # Used in evaluate(); dict of scores found for samples
@@ -59,7 +62,7 @@ class Atlas2(ClassificationEvaluation):
         # Load data iteratively
         for prediction, truth in self.loader.load_batches():
             # Score the data
-            scores = self.score(prediction, truth)
+            scores = self.score(truth, prediction, batchwise=True)
             for name, score_values in scores.items():
                 self.score_lists[name] += score_values
 
@@ -147,7 +150,7 @@ class Atlas2(ClassificationEvaluation):
         return score_dict
 
 
-def dice_coef(prediction, truth, batchwise=False):
+def dice_coef(truth, prediction, batchwise=False):
     '''
     Computes the Sørensen–Dice coefficient for the input matrices. If batchwise=True, the first dimension of the input
     images is assumed to indicate the batch, and this function will return a coefficient for each sample. i.e., images
@@ -191,7 +194,7 @@ def dice_coef(prediction, truth, batchwise=False):
         return coef_list[0]
 
 
-def volume_difference(prediction, truth, batchwise=False):
+def volume_difference(truth, prediction, batchwise=False):
     '''
     Computes the total volume difference between the prediction and ground truth.
     Parameters
@@ -223,7 +226,7 @@ def volume_difference(prediction, truth, batchwise=False):
     return
 
 
-def simple_lesion_count_difference(prediction, truth, batchwise=False):
+def simple_lesion_count_difference(truth, prediction, batchwise=False):
     '''
     Computes the difference in the number of distinct regions between the two input images. Regions are considered
     distinct if there exists no path between two area that is entirely inside the region. Note that no evaluation
@@ -259,7 +262,7 @@ def simple_lesion_count_difference(prediction, truth, batchwise=False):
     return
 
 
-def lesion_count_by_weighted_assignment(prediction, truth, batchwise=False):
+def lesion_count_by_weighted_assignment(truth, prediction, batchwise=False):
     '''
     Performs lesion matching between the predicted lesions and the true lesions. A weighted bipartite graph between
     the predicted and true lesions is constructed, using precision as the edge weights. The returned value is the
@@ -315,6 +318,124 @@ def lesion_count_by_weighted_assignment(prediction, truth, batchwise=False):
         return lcwa[0]
     else:
         return tuple(lcwa)
+
+
+def precision(truth, prediction, batchwise=False):
+    '''
+    Returns the precision of the prediction: tp / (tp + fp)
+    Parameters
+    ----------
+    truth : np.array
+        Ground truth data.
+    prediction : np.array
+        Prediction data.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+    Returns
+    -------
+    float or tuple
+        Precision of the input. If batchwise=True, the tuple is the precision for every sample.
+    '''
+    # sklearn implementation requires vectors of ints
+    truth = np.round(truth).astype(np.uint8)
+    prediction = np.round(prediction).astype(np.uint8)
+
+    if(not batchwise):
+        # Convert to vector
+        num_pred = np.prod(prediction.shape)
+        return precision_score(truth.reshape.reshape((num_pred,)), prediction.reshape((num_pred,)))
+    else:
+        # Need to get the precision for each sample in the batch
+        precision_list = []
+        num_pred = np.prod(prediction.shape[1:])
+        for sample_idx in range(truth.shape[0]):
+            sample_precision = precision(truth[sample_idx, ...].reshape((num_pred,)),
+                                         prediction[sample_idx, ...].reshape((num_pred,)),
+                                         batchwise=False)
+            precision_list.append(sample_precision)
+        return tuple(precision_list)
+
+def sensitivity(truth, prediction, batchwise=False):
+    '''
+    Returns the sensitivity of the prediction: tp / (tp + fn)
+    Parameters
+    ----------
+    truth : np.array
+        Ground truth data.
+    prediction : np.array
+        Prediction data.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    float or tuple
+        Sensitivity of the input. If batchwise=True, the tuple is the sensitivity for every sample.
+    '''
+    return _recall(truth, prediction, batchwise=batchwise, pos_label=1)
+
+
+def specificity(truth, prediction, batchwise=False):
+    '''
+    Returns the specificity of the prediction: tn / (tn + fp)
+    Parameters
+    ----------
+    truth : np.array
+        Ground truth data.
+    prediction : np.array
+        Prediction data.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    float or tuple
+        Specificity of the input. If batchwise=True, the tuple is the specificity for every sample.
+    '''
+    return _recall(truth, prediction, batchwise=batchwise, pos_label=0)
+
+
+def _recall(truth, prediction, batchwise=False, pos_label=1):
+    '''
+    Returns the recall of the prediction: tp / (tp + fn), where 'positive' is defined by pos_label.
+    Parameters
+    ----------
+    truth : np.array
+        Ground truth data.
+    prediction : np.array
+        Prediction data.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+    pos_label : int
+        Optional. Indicate which label is the positive case. Default: 1.
+
+    Returns
+    -------
+
+    '''
+    # sklearn implementation requires vectors of ints
+    truth = np.round(truth).astype(np.uint8)
+    prediction = np.round(prediction).astype(np.uint8)
+
+    if(not batchwise):
+        # Convert to vector
+        num_pred = np.prod(prediction.shape)
+        return recall_score(truth.reshape.reshape((num_pred,)), prediction.reshape((num_pred,)), pos_label=pos_label)
+    else:
+        # Need to get the precision for each sample in the batch
+        recall_list = []
+        num_pred = np.prod(prediction.shape[1:])
+        for sample_idx in range(truth.shape[0]):
+            sample_recall = _recall(truth[sample_idx, ...].reshape((num_pred,)),
+                                       prediction[sample_idx, ...].reshape((num_pred,)),
+                                       batchwise=False,
+                                       pos_label=pos_label)
+            recall_list.append(sample_recall)
+        return tuple(recall_list)
 
 
 if __name__ == "__main__":
