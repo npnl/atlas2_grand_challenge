@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 import scipy.ndimage
 from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score
 config_json_path = join(dirname(__file__), 'config.json')
 
 class Atlas2(ClassificationEvaluation):
@@ -49,7 +49,8 @@ class Atlas2(ClassificationEvaluation):
                                 'Simple Lesion Count': simple_lesion_count_difference,
                                 'Precision': precision,
                                 'Sensitivity': sensitivity,
-                                'Specificity': specificity}
+                                'Specificity': specificity,
+                                'Accuracy': accuracy}
                                 # 'LCWA': lesion_count_by_weighted_assignment}
         self.loader = None  # Defined in _prepare_data_list
         self.score_lists = defaultdict(list)  # Used in evaluate(); dict of scores found for samples
@@ -415,7 +416,8 @@ def _recall(truth, prediction, batchwise=False, pos_label=1):
 
     Returns
     -------
-
+    float or tuple
+        Recall of the input for the label specified by pos_label. If batchwise=True, the tuple is the specificity for every sample.
     '''
     # sklearn implementation requires vectors of ints
     truth = np.round(truth).astype(np.uint8)
@@ -424,7 +426,7 @@ def _recall(truth, prediction, batchwise=False, pos_label=1):
     if(not batchwise):
         # Convert to vector
         num_pred = np.prod(prediction.shape)
-        return recall_score(truth.reshape.reshape((num_pred,)), prediction.reshape((num_pred,)), pos_label=pos_label)
+        return recall_score(truth.reshape((num_pred,)), prediction.reshape((num_pred,)), pos_label=pos_label)
     else:
         # Need to get the precision for each sample in the batch
         recall_list = []
@@ -437,6 +439,42 @@ def _recall(truth, prediction, batchwise=False, pos_label=1):
             recall_list.append(sample_recall)
         return tuple(recall_list)
 
+
+def accuracy(truth, prediction, batchwise=False):
+    '''
+    Returns the accuracy of the prediction (tp + tn) / (tp+tn+fp+fn)
+    Parameters
+    ----------
+    truth : np.array
+        Ground truth data.
+    prediction : np.array
+        Prediction data.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    float or tuple
+        Accuracy of the input. If batchwise=True, the tuple is the specificity for every sample.
+    '''
+    # sklearn implementation requires vectors of ints
+    truth = np.round(truth).astype(np.uint8)
+    prediction = np.round(prediction).astype(np.uint8)
+
+    if(not batchwise):
+        # Convert to vector
+        num_pred = np.prod(prediction.shape)
+        return accuracy_score(truth.reshape((num_pred,)), prediction.reshape((num_pred,)))
+    else:
+        accuracy_list = []
+        num_pred = np.prod(prediction.shape[1:])
+        for sample_idx in range(truth.shape[0]):
+            sample_accuracy = accuracy(truth[sample_idx, ...].reshape((num_pred,)),
+                                       prediction[sample_idx,...].reshape((num_pred,)),
+                                       batchwise=False)
+            accuracy_list.append(sample_accuracy)
+        return tuple(accuracy_list)
 
 if __name__ == "__main__":
     Atlas2().evaluate()
