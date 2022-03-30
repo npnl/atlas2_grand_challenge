@@ -16,7 +16,7 @@ COPY --chown=evaluator:evaluator requirements.txt /opt/evaluation/
 RUN python -m pip install --user -r requirements.txt
 
 
-COPY --chown=evaluator:evaluator testlabels /opt/evaluation/ground-truth
+COPY --chown=evaluator:evaluator ground-truth /opt/evaluation/ground-truth
 
 COPY --chown=evaluator:evaluator evaluation.py /opt/evaluation/
 COPY --chown=evaluator:evaluator settings.py /opt/evaluation/
