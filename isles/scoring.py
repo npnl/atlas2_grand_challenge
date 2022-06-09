@@ -2,7 +2,7 @@ import numpy as np
 import scipy.ndimage
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import precision_score, recall_score, accuracy_score
-
+import cc3d
 
 def dice_coef(truth, prediction, batchwise=False):
     '''
@@ -332,3 +332,155 @@ def accuracy(truth, prediction, batchwise=False):
                                        batchwise=False)
             accuracy_list.append(sample_accuracy)
         return tuple(accuracy_list)
+
+
+def compute_lesion_f1_score(truth, prediction, empty_value=1.0, connectivity=26):
+    """
+    Computes the lesion-wise F1-score between two masks.
+
+    Parameters
+    ----------
+    ground_truth : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    prediction : array-like, bool
+        Any other array of identical size as 'ground_truth'. If not boolean, it will be converted.
+    empty_value : scalar, float.
+    connectivity : scalar, int.
+
+    Returns
+    -------
+    f1_score : float
+        Lesion-wise F1-score as float.
+        Max score = 1
+        Min score = 0
+        If both images are empty (tp + fp + fn =0) = empty_value
+
+    Notes
+    -----
+    This function computes lesion-wise score by defining true positive lesions (tp), false positive lesions (fp) and
+    false negative lesions (fn) using 3D connected-component-analysis.
+
+    tp: 3D connected-component from the ground-truth image that overlaps at least on one voxel with the prediction image.
+    fp: 3D connected-component from the prediction image that has no voxel overlapping with the ground-truth image.
+    fn: 3d connected-component from the ground-truth image that has no voxel overlapping with the prediction image.
+    """
+    truth = np.asarray(truth).astype(bool)
+    prediction = np.asarray(prediction).astype(bool)
+    tp = 0
+    fp = 0
+    fn = 0
+
+    # Check if ground-truth connected-components are detected or missed (tp and fn respectively).
+    intersection = np.logical_and(truth, prediction)
+    labeled_ground_truth, N = cc3d.connected_components(truth, connectivity=connectivity, return_N=True)
+
+    # Iterate over ground_truth clusters to find tp and fn.
+    # tp and fn are only computed if the ground-truth is not empty.
+    if N > 0:
+        for _, binary_cluster_image in cc3d.each(labeled_ground_truth, binary=True, in_place=True):
+            if np.logical_and(binary_cluster_image, intersection).any():
+                tp += 1
+            else:
+                fn += 1
+
+    # iterate over prediction clusters to find fp.
+    # fp are only computed if the prediction image is not empty.
+    labeled_prediction, N = cc3d.connected_components(prediction, connectivity=connectivity, return_N=True)
+    if N > 0:
+        for _, binary_cluster_image in cc3d.each(labeled_prediction, binary=True, in_place=True):
+            if not np.logical_and(binary_cluster_image, truth).any():
+                fp += 1
+
+    # Define case when both images are empty.
+    if tp + fp + fn == 0:
+        _, N = cc3d.connected_components(truth, connectivity=connectivity, return_N=True)
+        if N == 0:
+            f1_score = empty_value
+    else:
+        f1_score = tp / (tp + (fp + fn) / 2)
+
+    return f1_score
+
+def compute_absolute_lesion_count_difference(truth, prediction, connectivity=26):
+    """
+    Computes the absolute lesion difference between two masks. The number of lesions are counted for
+    each volume, and their absolute difference is computed.
+    Parameters
+    ----------
+    truth : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    prediction : array-like, bool
+        Any other array of identical size as 'ground_truth'. If not boolean, it will be converted.
+    Returns
+    -------
+    abs_les_diff : int
+        Absolute lesion difference as integer.
+        Maximum similarity = 0
+        No similarity = inf
+    Notes
+    -----
+    """
+    truth = np.asarray(truth).astype(bool)
+    prediction = np.asarray(prediction).astype(bool)
+
+    _, ground_truth_numb_lesion = cc3d.connected_components(truth, connectivity=connectivity, return_N=True)
+    _, prediction_numb_lesion = cc3d.connected_components(prediction, connectivity=connectivity, return_N=True)
+    abs_les_diff = abs(ground_truth_numb_lesion - prediction_numb_lesion)
+
+    return abs_les_diff
+
+def lesion_f1_score(truth, prediction, batchwise=False):
+    """ Wrapper of compute_lesion_f1_score function to work batchwise
+
+    Parameters
+    ----------
+    truth : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    prediction : array-like, bool
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    float or tuple
+        Lesion-wise F1-score. If batchwise=True, the tuple is the F1-score for every sample.
+    """
+
+    if not batchwise:
+        return compute_lesion_f1_score(truth, prediction)
+    else:
+        f1_list = []
+        truth_shape = truth.shape
+        for i in range(truth_shape[0]):
+            f1_list.append(compute_lesion_f1_score(truth[i], prediction[i]))
+        return tuple(f1_list)
+
+
+def absolute_lesion_count_difference(truth, prediction, batchwise=False):
+    """ Wrapper of compute_absolute_lesion_count_difference function to work batchwise
+
+    Parameters
+    ----------
+    truth : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    prediction : array-like, bool
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    int or tuple
+        Absolute lesion count difference. If batchwise=True, the tuple is the Absolute lesion count difference
+        for every sample.
+    """
+
+    if not batchwise:
+        return compute_absolute_lesion_count_difference(truth, prediction)
+    else:
+        absolute_lesion_count_diff_list = []
+        truth_shape = truth.shape
+        for i in range(truth_shape[0]):
+            absolute_lesion_count_diff_list.append(compute_absolute_lesion_count_difference(truth[i], prediction[i]))
+        return tuple(absolute_lesion_count_diff_list)
