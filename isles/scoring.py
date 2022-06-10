@@ -40,7 +40,7 @@ def dice_coef(truth, prediction, batchwise=False):
 
     # Compute dice coef
     coef_list = []
-    for i in range(prediction.shape[0]):
+    for i in range(truth.shape[0]):
         coef_denom = np.sum(prediction[i,...]) + np.sum(truth[i,...])
         if(coef_denom == 0):  # If there are no non-zero labels in either the truth or the prediction
             coef_list.append(1.0)  # "Perfect" score
@@ -113,9 +113,9 @@ def simple_lesion_count_difference(truth, prediction, batchwise=False):
         _, truth_count = scipy.ndimage.label(truth)
         return np.abs(pred_count - truth_count)
     else:
-        pred_shape = prediction.shape
+        truth_shape = truth.shape
         count_list = []
-        for i in range(pred_shape[0]):
+        for i in range(truth_shape[0]):
             _, pred_count = scipy.ndimage.label(prediction[i, ...])
             _, truth_count = scipy.ndimage.label(truth[i, ...])
             count_list.append(np.abs(pred_count - truth_count))
@@ -153,7 +153,7 @@ def lesion_count_by_weighted_assignment(truth, prediction, batchwise=False):
 
     # "Lesion Count by Weighted Assignment"
     lcwa = []
-    for idx_sample in range(pred_shape[0]):
+    for idx_sample in range(truth_shape[0]):
         # Identify unique regions
         pred_lesions, num_pred_lesions = scipy.ndimage.label(prediction[idx_sample, ...])
         truth_lesion, num_truth_lesions = scipy.ndimage.label(truth[idx_sample, ...])
