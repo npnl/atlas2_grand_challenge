@@ -41,8 +41,12 @@ def dice_coef(truth, prediction, batchwise=False):
     # Compute dice coef
     coef_list = []
     for i in range(prediction.shape[0]):
+        coef_denom = np.sum(prediction[i,...]) + np.sum(truth[i,...])
+        if(coef_denom == 0):  # If there are no non-zero labels in either the truth or the prediction
+            coef_list.append(1.0)  # "Perfect" score
+            continue
         coef = prediction[i:i+1, ...] @ truth[i:i+1, ...].T
-        coef = 2*coef / (np.sum(prediction[i,...]) + np.sum(truth[i,...]))
+        coef = 2*coef / coef_denom
         coef_list.append(float(coef))
 
     # Return list of coeffs if batchwise, otherwise return float
