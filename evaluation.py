@@ -79,7 +79,8 @@ def merge_dict(list_of_dicts: list) -> defaultdict:
 def make_subloader_and_evaluate(data_list, data_shape, target_list, target_shape, eval_settings):
     # We can't pass the BIDSLoader object directly, so we have to recreate it here. The sample BIDS dataset allows
     # us to quickly initialize a BIDSLoader since the dataset is small.
-    local_loader = BIDSLoader(root_list=[eval_settings["SampleBIDS"], eval_settings["SampleBIDS"]],
+    local_loader = BIDSLoader(data_root=[eval_settings["SampleBIDS"]],
+                              target_root=[eval_settings["SampleBIDS"]],
                               data_derivatives_names=['atlas2'],
                               target_derivatives_names=['atlas2'],
                               target_entities=[{"suffix": "T1w"}],
@@ -96,11 +97,12 @@ def make_subloader_and_evaluate(data_list, data_shape, target_list, target_shape
 
 if __name__ == "__main__":
     # Get data to pass to workers
-    loader = BIDSLoader(root_list=[eval_settings['PredictionRoot'], eval_settings['GroundTruthRoot']],
-                            data_derivatives_names=eval_settings['PredictionBIDSDerivativeName'],
-                            target_derivatives_names=eval_settings['GroundTruthBIDSDerivativeName'],
-                            target_entities=eval_settings['GroundTruthEntities'],
-                            data_entities=eval_settings['PredictionEntities'])
+    loader = BIDSLoader(data_root=[eval_settings['PredictionRoot']],
+                        target_root=[eval_settings['GroundTruthRoot']],
+                        data_derivatives_names=eval_settings['PredictionBIDSDerivativeName'],
+                        target_derivatives_names=eval_settings['GroundTruthBIDSDerivativeName'],
+                        target_entities=eval_settings['GroundTruthEntities'],
+                        data_entities=eval_settings['PredictionEntities'])
     # Parallelize data
     num_proc = eval_settings['Multiprocessing']
     loader_idx_list = np.floor(np.linspace(0, len(loader), num_proc+1)).astype(int)
