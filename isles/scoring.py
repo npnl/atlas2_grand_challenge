@@ -336,3 +336,98 @@ def accuracy(truth, prediction, batchwise=False):
                                        batchwise=False)
             accuracy_list.append(sample_accuracy)
         return tuple(accuracy_list)
+
+
+def _lesion_f1_score(truth, prediction, empty_value=1.0):
+    """
+    Computes the lesion-wise F1-score between two masks. Masks are considered true positives if at least one voxel
+    overlaps between the truth and the prediction.
+
+    Parameters
+    ----------
+    truth : array-like, bool
+        3D array. If not boolean, will be converted.
+    prediction : array-like, bool
+        3D array with a shape matching 'truth'. If not boolean, will be converted.
+    empty_value : scalar, float
+        Optional. Value to which to default if there are no labels. Default: 1.0.
+
+    Returns
+    -------
+    f1_score : float
+        Lesion-wise F1-score as float.
+        Max score = 1
+        Min score = 0
+        If both images are empty (tp + fp + fn =0) = empty_value
+
+    Notes
+    -----
+    This function computes lesion-wise score by defining true positive lesions (tp), false positive lesions (fp) and
+    false negative lesions (fn) using 3D connected-component-analysis.
+
+    tp: 3D connected-component from the ground-truth image that overlaps at least on one voxel with the prediction image.
+    fp: 3D connected-component from the prediction image that has no voxel overlapping with the ground-truth image.
+    fn: 3d connected-component from the ground-truth image that has no voxel overlapping with the prediction image.
+    """
+    tp, fp, fn = 0, 0, 0
+    f1_score = empty_value
+
+    labeled_ground_truth, num_lesions = scipy.ndimage.label(truth.astype(bool))
+
+    # For each true lesion, check if there is at least one overlapping voxel. This determines true positives and
+    # false negatives (unpredicted lesions)
+    for idx_lesion in range(1, num_lesions+1):
+        lesion = labeled_ground_truth == idx_lesion
+        lesion_pred_sum = lesion + prediction
+        if(np.max(lesion_pred_sum) > 1):
+            tp += 1
+        else:
+            fn += 1
+
+    # For each predicted lesion, check if there is at least one overlapping voxel in the ground truth.
+    labaled_prediction, num_pred_lesions = scipy.ndimage.label(prediction.astype(bool))
+    for idx_lesion in range(1, num_pred_lesions+1):
+        lesion = labaled_prediction == idx_lesion
+        lesion_pred_sum = lesion + truth
+        if(np.max(lesion_pred_sum) <= 1):  # No overlap
+           fp += 1
+
+    # Compute f1_score
+    denom = tp + (fp + fn)/2
+    if(denom != 0):
+        f1_score = tp / denom
+    return f1_score
+
+
+def lesion_f1_score(truth, prediction, batchwise=False):
+    """ Computes the F1 score lesionwise. Lesions are considered accurately predicted if a single voxel overlaps between
+    a region in `truth` and `prediction`.
+
+    Parameters
+    ----------
+    truth : array-like, bool
+        Array containing the ground truth of a sample, of shape (channel, x, y, z). Returned F1 score is the mean
+        across the channels. If batchwise=True, array should be 5D with (batch, channel, x, y, z).
+    prediction : array-like, bool
+        Array containing predictions for a sample; description is otherwise identical to `truth`.
+    batchwise : bool
+        Optional. Indicate whether the computation should be done batchwise, assuming that the first dimension of the
+        data is the batch. Default: False.
+
+    Returns
+    -------
+    float or tuple
+        Lesion-wise F1-score. If batchwise=True, the tuple is the F1-score for every sample.
+    """
+    if not batchwise:
+        num_channel = truth.shape[0]
+        f1_score = _lesion_f1_score(truth[0, ...], prediction[0, ...])
+        for i in range(1, num_channel):
+            f1_score += _lesion_f1_score(truth[i, ...], prediction[i, ...])
+        return f1_score / num_channel
+    else:
+        f1_list = []
+        num_batch = truth.shape[0]
+        for idx_batch in range(num_batch):
+            f1_list.append(lesion_f1_score(truth[idx_batch, ...], prediction[idx_batch, ...], batchwise=False))
+        return f1_list

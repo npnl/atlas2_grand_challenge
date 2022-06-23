@@ -1,5 +1,4 @@
-from isles.scoring import dice_coef, volume_difference, simple_lesion_count_difference, precision, sensitivity, \
-  specificity, accuracy, lesion_count_by_weighted_assignment
+from isles.scoring import dice_coef, volume_difference, simple_lesion_count_difference, lesion_f1_score
 
 eval_settings = {
     "GroundTruthRoot": "/opt/evaluation/ground-truth/",     # Path to the ground truth
@@ -22,8 +21,5 @@ eval_settings = {
     "ScoringFunctions": {'Dice': dice_coef,                 # Functions to use for scoring the dataset.
                          'Volume Difference': volume_difference,
                          'Simple Lesion Count': simple_lesion_count_difference,
-                         'Precision': precision,
-                         'Sensitivity': sensitivity,
-                         'Specificity': specificity,
-                         'Accuracy': accuracy}
+                         'Lesionwise F1-Score': lesion_f1_score}
 }
